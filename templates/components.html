@@ -1,0 +1,72 @@
+{% component admonish(kind: string = "note", title: string = "", collapsible: bool = false) -%}
+{%- set outer = "details" if collapsible else "div" -%}
+{%- set head = "summary" if collapsible else "div" -%}
+<{{ outer }} class="admonition admonish-{{ kind }}">
+<{{ head }} class="admonition-title">{{ (title or kind | capitalize) | markdown(inline=true) | safe }}</{{ head }}>
+<div class="admonition-body">
+
+{{ body }}
+
+</div>
+</{{ outer }}>
+{%- endcomponent admonish %}
+
+{% component figure(src: string, alt: string, caption: string = "") -%}
+<figure class="figure">
+{%- if src[-4:] == ".mp4" %}
+<video src="{{ src }}" autoplay loop muted playsinline aria-label="{{ alt }}"></video>
+{%- else %}
+<img src="{{ src }}" alt="{{ alt }}" loading="lazy">
+{%- endif %}
+{%- if caption %}
+<figcaption>{{ caption | markdown(inline=true) | safe }}</figcaption>
+{%- endif %}
+</figure>
+{%- endcomponent figure %}
+
+{% component stats(caption: string) -%}
+<figure class="stats"><div class="stats-grid">{{ body }}</div><figcaption>{{ caption | markdown(inline=true) | safe }}</figcaption></figure>
+{%- endcomponent stats %}
+
+{% component stat(value: string, label: string) -%}
+<div class="stat"><div class="stat-value">{{ value }}</div><div class="stat-label">
+
+{{ label | safe }}
+
+</div></div>
+{%- endcomponent stat %}
+
+{% component chain(caption: string) -%}
+<figure class="chain"><div class="chain-links">{{ body }}</div><figcaption>{{ caption | markdown(inline=true) | safe }}</figcaption></figure>
+{%- endcomponent chain %}
+
+{% component chain_link(name: string, detail: string, repeats: bool = false) -%}
+<div class="chain-link{% if repeats %} chain-link-repeats{% endif %}"><code>LinkId.{{ name }}</code><span>{{ detail }}</span></div>
+{%- endcomponent chain_link %}
+
+{% component steps() -%}
+<div class="steps">
+
+{{ body }}
+
+</div>
+{%- endcomponent steps %}
+
+{% component panels() -%}
+<div class="panels">
+{{ body }}
+</div>
+{%- endcomponent panels %}
+
+{% component panel(title: string) -%}
+<div class="panel">
+<div class="panel-title">{{ title }}</div>
+
+{{ body }}
+
+</div>
+{%- endcomponent panel %}
+
+{% component terminal() -%}
+<pre class="terminal"><span class="terminal-bar"></span><code>{{ body | trim }}</code></pre>
+{%- endcomponent terminal %}

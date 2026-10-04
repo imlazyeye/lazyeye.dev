@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ config.title }}{% endblock title %}</title>
+  <meta name="description" content="{% block description %}{{ config.description }}{% endblock description %}">
+  <link rel="icon" type="image/svg+xml" href="{{ get_url(path='favicon.svg') }}">
+  <link rel="alternate" type="application/atom+xml" title="{{ config.title }}" href="{{ get_url(path='atom.xml') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Fira+Code:wght@400;600&display=swap">
+  <link rel="stylesheet" href="{{ get_url(path='style.css', cachebust=true) }}">
+  {% block head %}{% endblock head %}
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-header">
+      <a class="brand" href="{{ get_url(path='@/_index.md') }}">
+        <img src="{{ get_url(path='favicon.svg') }}" alt="">lazyeye
+      </a>
+      <nav>
+        <a href="{{ get_url(path='@/blog/_index.md') }}">Writing</a>
+        <a href="{{ config.extra.github }}">GitHub</a>
+      </nav>
+    </header>
+    <main>
+      {% block content %}{% endblock content %}
+    </main>
+    <footer class="site-footer">
+      <span>© {{ now() | date(format="%Y") }} Gabe Weiner</span>
+      <a href="{{ get_url(path='atom.xml') }}">Feed</a>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,9 @@
+<ul class="post-list">
+  {% for post in blog.pages %}
+  <li>
+    <a href="{{ post.permalink }}">{{ post.title }}</a>
+    {% if post.draft %}<span class="draft">draft</span>{% endif %}
+    <time datetime="{{ post.date }}">{{ post.date | date(format="%b %-d, %Y") }}</time>
+  </li>
+  {% endfor %}
+</ul>

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <h1>{{ section.title }}</h1>
+  {{ section.content | safe }}
+</section>
+
+<section>
+  <h2>Work</h2>
+  <div class="cards">
+    {% for project in section.extra.projects %}
+    <a class="card" href="{{ project.url }}">
+      <span class="card-title">{{ project.name }}</span>
+      <span class="card-sub">{{ project.description }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+{% set blog = get_section(path="blog/_index.md") %}
+{% if blog.pages %}
+<section>
+  <h2>Writing</h2>
+  {% include "post-list.html" %}
+</section>
+{% endif %}
+{% endblock content %}
