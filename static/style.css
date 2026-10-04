@@ -543,8 +543,9 @@ figcaption {
 .steps li::before {
     content: counter(step);
     position: absolute;
-    top: -2px;
+    top: 50%;
     left: 0;
+    transform: translateY(-50%);
     display: grid;
     place-items: center;
     width: 34px;

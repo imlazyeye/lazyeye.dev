@@ -21,29 +21,41 @@ Because numbers are fun, let's break some down to put the project we're covering
 {{ <stat value="1" label="engine swaps" /> }}
 {% </stats> %}
 
-Bugs come in all flavors and sizes, but the following are three particularly hard-to-spot ones loosely based on real incidents we've had. Try to think about how you'd ensure these never hit production.
+Games can't be tested the same way other projects can be. Unit tests don't look in the right places to find the bugs a game is likely to encounter. Don't get me wrong, I love a good unit test -- [one of my other projects has over 2,200 of them](https://mim.as). But unit tests take small, focused sections of code and test them in **isolation**. They're great at maintaining correctness within an individual system, but they are conceptually blind to the ways that systems will interact with the rest of the codebase.
 
-{% <admonish kind="bug" title="Bug #1: A missed rename"> %}
-An engineer renames a function that's called 40 times in the game's scripts. They update 39 of the calls, missing a single one that only triggers on 1 of the 100 possible floors in the mines.
+The principal challenge for stability in video games is not in writing individual systems. Instead, **bugs almost always emerge where systems cross paths**, out in the "real world", where they're all playing in the same sandbox. To test this, we need an _integration test_, something that runs the application the way a real user would.
+
+Instead of executing individual functions from specific systems, we're going to boot up **our entire game the same way a real player would**. We're going to click the "New Game" button on the main menu and test features where they lie within the real use case.
+
+## Creating the right environment
+
+If we want our integration test to work well, we have to rewrite our brains to _love_ crashing. **Fields of Mistria is eager to crash**. At the first whiff of a problem, we tear the entire thing down.
+
+This, of course, has limits. Many of our crashes come from debug asserts, which will instead log a warning and proceed in production builds. But **error recovery in video games is extremely limited**. In some cases it might be easy to throw the error away, but we have to question the state we're left with afterwards.
+
+A particular bug in v0.12.0 comes to mind:
+
+{% <admonish kind="warning" title="Failure to spawn furniture object"> %}
+The player is loading their save and we are placing all of their furniture objects on the map. One of those objects is somehow in an illegal position when we try to place it.
 {% </admonish> %}
 
-{% <admonish kind="bug" title="Bug #2: A hard-coded value"> %}
-A designer lowers the heart level needed to invite an NPC to the Shooting Star Festival from 5 to 4. We update the quest details, dialogue, and tutorials, but miss that the number is hard-coded in the logic instead of being read from our data files. Despite what the game tells them, players are unable to progress their quest.
-{% </admonish> %}
+At the time, our solution to the above was to dismiss the error, ignore the object, and continue with our load. Preventing a user from loading their save seemed catastrophic, so surely it was better to just move past that one weird mistake and let life continue, no?
 
-{% <admonish kind="bug" title="Bug #3: An ID typo"> %}
-The Tomato Soup item has a typo in its internal ID: `tomato_soupp`. We fix the typo and update every reference to it in the codebase. A player has this item sitting on the ground on their farm, and after updating, their game crashes when they load their save.
-{% </admonish> %}
+Soon after the release, we started to hear buzz that players' chests were missing from their farms. This sounded bizarre, as there's nothing special about chests in terms of how they save and load, so there's no reason that they _specifically_ would have a problem.
 
-Relative to the size of the game, these bugs are all hidden in small corners. When we're releasing a new content update, or turning around a quick patch to fix a bug, there's only so much time to verify our fixes and check for regressions. We're **a small indie team with over a million players**. So what do we do?
+And they didn't! In actuality, _many_ users were having singular objects vanish. The difference is that chests are the most precious object for a player. A random rock wasn't where it was yesterday? You almost certainly wouldn't even notice. But your chest, containing all of your precious items? That's a huge issue -- that's worth a bug report.
 
-Unit tests are invaluable in software development, but they don't translate to video games the way you'd hope. Don't get me wrong, I love a good unit test -- [one of my other projects has over 2,200 of them](https://mim.as) -- but **a game's bugs don't live inside its individual systems**. They live where those systems cross paths, in the endless combinations of player-driven content.
+{{ <figure src="chests.png" alt="A screenshot of Fields of Mistria where a player stands in front of many storage chests." caption="Players take their storage very seriously in Fields of Mistria." /> }}
 
-We don't (only) need to assert the output of particular functions. We need to blast the real game through as many scenarios as possible and detect if _anything_ is off.
+This is our worst nightmare as far as bugs go (and is still ominously referred to as "the chest bug" at the studio today), because once we let them load in with that chest missing, **all it takes is saving over their file once for it to be gone forever**. If we can get a patch out soon enough, we can fix the problem and allow these objects to spawn again, but every second that ticks by, we know that more and more players are going to lose data.
+
+Within the hour, the bug was fixed and a new build was being assembled for deployment. But what if we could go back in time, and instead, what if we had just crashed when we failed to load these objects?
+
+The advantage isn't that it would have ultimately protected the users' save files until a patch was released (though that is true). The _real_ advantage is that _we_ would have noticed **days earlier when our integration tests failed**.
 
 ## Enter `TestSuite.gml`
 
-There's a variety of approaches to this problem, ranging from technical practices to production pipelines, but the one we're covering today is our test suite. On our previous engine, the full set of tests could take up to seven hours to complete, so we had to run most of them in overnight cron jobs. On our new engine, we can run them headless with an uncapped time step. Split across 30 jobs, the entire thing typically finishes in **under 10 minutes**.
+`TestSuite.gml` is a file of roughly 6,000 lines of integration tests that eagerly seek out crashes. On our previous engine, the full set of tests could take up to seven hours to complete, so we had to run most of them in overnight cron jobs. On our new engine, we can run them headless with an uncapped time step. Split across 30 jobs, the entire thing typically finishes in **under 10 minutes**. That enables us to run them on every single push sent to GitHub, meaning we catch bugs as soon as they're created.
 
 ### Goals
 
@@ -51,16 +63,32 @@ For the test suite to do its job, a few things need to be true about it.
 
 {% <steps> %}
 1. **It's quick to work with.** Any engineer should be able to add a new test, or diagnose a failing one, without fuss.
-2. **It's authentic, without constant upkeep.** It should test the game as realistically as possible, and spurious failures should be rare. No matter your policy, people start ignoring a suite once it has a reputation for crying wolf.
+2. **It's authentic, without constant upkeep.** It should test the game as realistically as possible, and spurious failures should be rare. No matter the policy, people start ignoring a suite once it has a reputation for crying wolf.
 3. **It's aligned with the codebase.** The suite should fit the architecture of the project as a whole, so that its needs complement the needs of the code.
 {% </steps> %}
 
-## How tests work
+### Example targets
+
+These are three bugs loosely based on real incidents Fields of Mistria has encountered throughout its development. As we go through the suite, we're going to identify where and how they would be caught.
+
+{% <admonish kind="bug" title="Bug #1: A missed rename"> %}
+We rename a function that's called 40 times in the game's scripts. We update 39 of the calls, missing a single one that only triggers on 1 of the 100 possible floors in the mines.
+{% </admonish> %}
+
+{% <admonish kind="bug" title="Bug #2: A hard-coded value"> %}
+We lower the heart level needed to invite an NPC to the Shooting Star Festival from 5 to 4. We update the quest details, dialogue, and tutorials, but miss that the number is hard-coded in the logic instead of being read from our data files. Despite what the game tells them, players are unable to progress their quest.
+{% </admonish> %}
+
+{% <admonish kind="bug" title="Bug #3: An ID typo"> %}
+The Tomato Soup item has a typo in its internal ID: `tomato_soupp`. We fix the typo and update every reference to it in the codebase. A player has this item sitting on the ground on their farm, and after updating, their game crashes when they load their save.
+{% </admonish> %}
+
+### How tests work
 
 Our tests are built on a core system in the codebase called `Chains`. If you've worked with coroutines, or asynchronous execution in general, the concept should feel familiar. A `Chain` is a series of `Link`s, each carrying some logic and a condition for moving on. Every tick, the chain runs through its links until one tells it to wait, then picks back up from there on the following frame.
 
 {% <admonish kind="note"> %}
-Fields of Mistria ships its scripts in plain text. I'll be simplifying the excerpts in this article to keep things focused, but if you own the game, you can read the real code behind everything I talk about. It's even possible to run the test suite on the shipped version of the game, but I'll leave figuring out how to the talented modding community.
+Fields of Mistria ships its scripts in plain text. We'll be simplifying the excerpts in this article to keep things focused, but if you own the game, you can read the real code behind everything we talk about. It's even possible to run the test suite on the shipped version of the game, but we'll leave figuring out how to the talented modding community.
 {% </admonish> %}
 
 ```js,name=GML
@@ -110,12 +138,12 @@ TS_TESTS.push({
 Note that there are no manual asserts or checks here. Again, the primary goal of the suite is just to find crashes. **It is _not_ a replacement for real, human QA**. We do write manual asserts at times, but later on we'll cover how we program our codebase to work naturally with this kind of testing.
 
 {% <admonish kind="success" title="Bug #1: Caught"> %}
-Our missed rename has been caught. As soon as the engineer opens a PR, the suite runs, visits every floor, and crashes on the undefined call. Merging is blocked until it's fixed and the tests pass.
+Our missed rename has been caught. As soon we open PR the suite runs, visits every floor, and crashes on the undefined call. Merging is blocked until it's fixed and the tests pass.
 {% </admonish> %}
 
 ## Testing story content
 
-Fields of Mistria has over 150 cutscenes. Players advance through dialogue at their own pace, but at an average one, **watching them all would take roughly 15 hours**. They're also highly specific, as there are twelve different characters you can date. Whether you're going to watch the shooting stars with your crush, asking them to dance at the Harvest Festival, or attending your wedding ceremony, the scenes and dialogue are different for each of them. It's incredibly easy to introduce a bug in one scene with a seemingly innocuous edit somewhere else.
+Fields of Mistria has over 150 cutscenes. Players advance through dialogue at their own pace, but at an average one, **watching them all would take roughly 15 hours**. They're also highly specific, as there are twelve different characters to date. Whether a player is watching the shooting stars with their crush, asking them to dance at the Harvest Festival, or attending their wedding ceremony, the scenes and dialogue are different for each character. It's incredibly easy to introduce a bug in one scene with a seemingly innocuous edit somewhere else.
 
 But crashes aren't the only thing we need to worry about; **softlocks are their own nightmare**. In many cases it'd almost be _better_ if they were crashes. A crash gets reported to [Sentry](https://sentry.io/welcome/)[^sentry] instantly with information about exactly where it happened and precisely how many players it's affecting. With a softlock, the player is just as stuck, but we have to wait on their reports and reproduction steps to diagnose it.
 
@@ -197,8 +225,6 @@ Our hard-coded value has been caught. The test raises Juniper to the 4 hearts ou
 
 ## Catching broken save files
 
-Corrupting a player's save file is the cardinal sin for a game developer. A crash is annoying, sure, but it can be fixed in a later patch. If you break a save file in a way you can't detect or fix with a patch, the player has **lost every second of gameplay they've invested so far**. Thankfully, we haven't had to deal with this, in large part because of our test suite.[^mods]
-
 Our project contains a folder called `upgrade_targets` full of save files, which come in two kinds:
 
 {% <panels> %}
@@ -220,11 +246,9 @@ This is how we've been able to guarantee that **a player's save file will always
 
 ## Writing code aligned with the suite
 
-Since the suite ultimately relies on crashes to detect errors, **we take a _very_ crash-forward approach to programming**. Granted, many of our checks are debug-only asserts: in production builds we just emit a warning and continue, but in dev builds the game panics the moment anything seems out of place. [I wrote about this approach years ago](https://lazyeye.medium.com/stability-gms2-f81e45e46984), and while that article is pretty old at this point, essentially everything in it still carries over to how we work today.
+We've already discussed how we take a crash-forward approach on Fields of Mistria. That idea goes further with how we design our databases themselves, such that **they naturally demand testing**. For example, every quest is required to specify which test it expects to be completed in. When that test finishes, it looks at every quest that references it, and if any of them aren't in the player's completed quest log, the test fails. The same goes for other systems, like cutscenes and menus.
 
-We also **write our systems such that they demand testing**. For example, every quest is required to specify which test it expects to be completed in. When that test finishes, it looks at every quest that references it, and if any of them aren't in the player's completed quest log, the test fails. The same goes for other systems, like cutscenes and menus.
-
-When a writer adds a new cutscene to the game, we _could_ ask them to always remember to get an engineer to update the tests, but it's far safer to expect the game to take care of itself. Every cutscene has to declare which test is responsible for it:
+When a writer adds a new cutscene to the game, we _could_ ask them to always remember to get one of our engineers to update the tests, but it's far safer to expect the game to take care of itself. Every cutscene has to declare which test is responsible for it:
 
 ```toml,name=cutscenes.toml
 [my_new_cutscene]
@@ -241,14 +265,13 @@ Test Suite Result: <span class="fail">FAILED</span>. The following cutscenes wer
 
 ## The results
 
-After tens of thousands of suite runs, I can't really begin to estimate how much time and money this system has saved us. Honestly, it's **hard to imagine the game being possible without it**. When we decided to switch to our own engine built in Rust (which our Lead Programmer, [Jack Spira](https://github.com/sanbox-irl), covers in his RustConf talk, [_Oxidizing Fields of Mistria_](https://www.youtube.com/watch?v=OkzUNS0H2_g)), the test suite was the litmus test for whether it was ready for production. Short of shipping it, there was no bigger hurdle we could put in front of the new engine than getting through that enormous amount of execution. For months of its development, the suite doubled as a production tool, showing us exactly what was left to port over.
+After tens of thousands of suite runs, we can't really begin to estimate how much time and money this system has saved us. Honestly, it's **hard to imagine the game being possible without it**. When we decided to switch to our own engine built in Rust (which our Lead Programmer, [Jonathan Spira](https://github.com/sanbox-irl), covers in his RustConf talk, [_Oxidizing Fields of Mistria_](https://www.youtube.com/watch?v=OkzUNS0H2_g)), the test suite was the litmus test for whether it was ready for production. Short of shipping it, there was no bigger hurdle we could put in front of the new engine than getting through that enormous amount of execution. For months of its development, the suite doubled as a production tool, showing us exactly what was left to port over.
 
-Plus, after your game has been in production for over seven years, it's enormously reassuring to be able to look at this screen before hitting the big green release button on Steam.
+Plus, after over seven years in production, it's enormously reassuring to see this screen before hitting the big green release button on Steam.
 
 {{ <figure src="tests_passed.png" alt="GitHub checks for the test suite, all passing" caption="yeah... yeah, that's the good stuff" /> }}
 
 
-[^rust_loc]: Rust projects are obviously built on the shoulders of countless lines of open source code, so this number is approximated from the Rust inside of our engine, [fabricator](https://github.com/NPC-Studio/fabricator) (our GameMaker runtime), and the Rust within Fields of Mistria itself.
+[^rust_loc]: Rust projects are obviously built on the shoulders of countless lines of open-source code, so this number is approximated from the Rust inside of our engine, [fabricator](https://github.com/NPC-Studio/fabricator) (our GameMaker runtime), and the Rust within Fields of Mistria itself.
 [^team_members]: It's tough to measure a number like this due to a mix of full-time and part-time roles, people joining and leaving, and the external teams we worked with for things such as QA and localization. You can refer to [our MobyGames page](https://www.mobygames.com/game/229134/fields-of-mistria/) for the full credits of all the incredible folks who made the game possible.
 [^sentry]: Sentry and error reporting deserve their own article, but needless to say, automatic crash reporting is essential. This isn't news to the software space, but many indie devs skip this. Don't!
-[^mods]: Okay, this isn't strictly true -- it does happen to players who use mods and then open their saves on a new version without those mods installed. We've gotten much better over time at handling those errors so that they can still make it into the game. Ultimately, all I can _really_ claim is that this has never happened at scale.
