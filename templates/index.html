@@ -1,21 +1,28 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="hero">
+<section class="intro">
   <h1>{{ section.title }}</h1>
+  <p class="tagline">{{ section.extra.tagline }}</p>
   {{ section.content | safe }}
+  <div class="contact">
+    <a class="button button-primary" href="{{ get_url(path=config.extra.resume) }}">Resume</a>
+    <a class="button" href="mailto:{{ config.extra.email }}">{{ config.extra.email }}</a>
+    <a class="button" href="{{ config.extra.linkedin }}">LinkedIn</a>
+    <a class="button" href="{{ config.extra.github }}">GitHub</a>
+  </div>
 </section>
 
 <section>
   <h2>Work</h2>
-  <div class="cards">
+  <ul class="list">
     {% for project in section.extra.projects %}
-    <a class="card" href="{{ project.url }}">
-      <span class="card-title">{{ project.name }}</span>
-      <span class="card-sub">{{ project.description }}</span>
-    </a>
+    <li>
+      <a href="{{ project.url }}">{{ project.name }}</a>
+      <span class="meta">{{ project.role }}</span>
+    </li>
     {% endfor %}
-  </div>
+  </ul>
 </section>
 
 {% set blog = get_section(path="blog/_index.md") %}

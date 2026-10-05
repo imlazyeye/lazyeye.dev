@@ -15,4 +15,7 @@ error_on_missing_language = true
 data_attr_position = "pre"
 
 [extra]
+email = "imlazyeye@gmail.com"
+resume = "gabe-weiner-resume.pdf"
+linkedin = "https://www.linkedin.com/in/gabe-weiner"
 github = "https://github.com/imlazyeye"
